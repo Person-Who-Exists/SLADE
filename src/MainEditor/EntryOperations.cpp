@@ -65,9 +65,6 @@ CVAR(String, path_acc, "", CVar::Flag::Save);
 CVAR(String, path_acc_libs, "", CVar::Flag::Save);
 CVAR(String, path_java, "", CVar::Flag::Save);
 CVAR(String, path_decohack, "", CVar::Flag::Save);
-CVAR(String, path_pngout, "", CVar::Flag::Save);
-CVAR(String, path_pngcrush, "", CVar::Flag::Save);
-CVAR(String, path_deflopt, "", CVar::Flag::Save);
 CVAR(String, path_db2, "", CVar::Flag::Save)
 CVAR(Bool, acc_always_show_output, false, CVar::Flag::Save);
 CVAR(Bool, decohack_always_show_output, false, CVar::Flag::Save);
@@ -1373,25 +1370,6 @@ bool entryoperations::optimizePNG(ArchiveEntry* entry)
 		return false;
 	}
 
-	// Try to find PNG tools' executables if paths not already set
-	if (path_pngcrush.value.empty())
-		path_pngcrush = fileutil::findExecutable("pngcrush", "png");
-	if (path_pngout.value.empty())
-		path_pngout = fileutil::findExecutable("pngout", "png");
-	if (path_deflopt.value.empty())
-		path_deflopt = fileutil::findExecutable("deflopt", "png");
-
-	// Check if the PNG tools path are set up, at least one of them should be
-	string pngpathc = path_pngcrush;
-	string pngpatho = path_pngout;
-	string pngpathd = path_deflopt;
-	if ((pngpathc.empty() || !fileutil::fileExists(pngpathc)) && (pngpatho.empty() || !fileutil::fileExists(pngpatho))
-		&& (pngpathd.empty() || !fileutil::fileExists(pngpathd)))
-	{
-		log::error(1, "PNG tool paths not defined or invalid, no optimization done.");
-		return false;
-	}
-
 	// Save special chunks
 	bool          alphchunk     = gfx::pngGetalPh(entry->data());
 	auto          grabchunk     = gfx::getImageOffsets(entry->data());
@@ -1401,154 +1379,6 @@ bool entryoperations::optimizePNG(ArchiveEntry* entry)
 	size_t        oldsize   = entry->size();
 	size_t        crushsize = 0, outsize = 0, deflsize = 0;
 	bool          crushed = false, outed = false;
-
-	// Run PNGCrush
-	if (!pngpathc.empty() && fileutil::fileExists(pngpathc))
-	{
-		string        tmppath = app::path("", app::Dir::Temp) += "opt";
-		strutil::Path fn(tmppath);
-		fn.setExtension("opt");
-		string pngfile = fn.fullPath();
-		fn.setExtension("png");
-		string optfile = fn.fullPath();
-		entry->exportFile(pngfile);
-
-		string command = path_pngcrush.value + " -brute \"" + pngfile + "\" \"" + optfile + "\"";
-		output.Empty();
-		errors.Empty();
-		wxExecute(wxString::FromUTF8(command), output, errors, wxEXEC_SYNC);
-
-		if (fileutil::fileExists(optfile))
-		{
-			if (optfile.size() < oldsize)
-			{
-				entry->importFile(optfile);
-				fileutil::removeFile(optfile);
-				fileutil::removeFile(pngfile);
-			}
-			else
-				errormessages += "PNGCrush failed to reduce file size further.\n";
-			crushed = true;
-		}
-		else
-			errormessages += "PNGCrush failed to create optimized file.\n";
-		crushsize = entry->size();
-
-		// send app output to console if wanted
-		if (false)
-		{
-			string crushlog;
-			if (errors.GetCount())
-			{
-				crushlog += "PNGCrush error messages:\n";
-				for (size_t i = 0; i < errors.GetCount(); ++i)
-					crushlog += errors[i].utf8_string() + "\n";
-				errormessages += crushlog;
-			}
-			if (output.GetCount())
-			{
-				crushlog += "PNGCrush output messages:\n";
-				for (size_t i = 0; i < output.GetCount(); ++i)
-					crushlog += output[i].utf8_string() + "\n";
-			}
-			log::info(1, crushlog);
-		}
-	}
-
-	// Run PNGOut
-	if (!pngpatho.empty() && fileutil::fileExists(pngpatho))
-	{
-		string        tmppath = app::path("", app::Dir::Temp) += "opt";
-		strutil::Path fn(tmppath);
-		fn.setExtension("opt");
-		string pngfile = fn.fullPath();
-		fn.setExtension("png");
-		string optfile = fn.fullPath();
-		entry->exportFile(pngfile);
-
-		string command = path_pngout.value + " /y \"" + pngfile + "\" \"" + optfile + "\"";
-		output.Empty();
-		errors.Empty();
-		wxExecute(wxString::FromUTF8(command), output, errors, wxEXEC_SYNC);
-
-		if (fileutil::fileExists(optfile))
-		{
-			if (optfile.size() < oldsize)
-			{
-				entry->importFile(optfile);
-				fileutil::removeFile(optfile);
-				fileutil::removeFile(pngfile);
-			}
-			else
-				errormessages += "PNGout failed to reduce file size further.\n";
-			outed = true;
-		}
-		else if (!crushed)
-			// Don't treat it as an error if PNGout couldn't create a smaller file than PNGCrush
-			errormessages += "PNGout failed to create optimized file.\n";
-		outsize = entry->size();
-
-		// send app output to console if wanted
-		if (false)
-		{
-			string pngoutlog;
-			if (errors.GetCount())
-			{
-				pngoutlog += "PNGOut error messages:\n";
-				for (size_t i = 0; i < errors.GetCount(); ++i)
-					pngoutlog += errors[i].utf8_string() + "\n";
-				errormessages += pngoutlog;
-			}
-			if (output.GetCount())
-			{
-				pngoutlog += "PNGOut output messages:\n";
-				for (size_t i = 0; i < output.GetCount(); ++i)
-					pngoutlog += output[i].utf8_string() + "\n";
-			}
-			log::info(1, pngoutlog);
-		}
-	}
-
-	// Run deflopt
-	if (!pngpathd.empty() && fileutil::fileExists(pngpathd))
-	{
-		string        tmppath = app::path("", app::Dir::Temp) += "opt";
-		strutil::Path fn(tmppath);
-		fn.setExtension("png");
-		string pngfile = fn.fullPath();
-		entry->exportFile(pngfile);
-
-		string command = path_deflopt.value + " /sf \"" + pngfile + "\"";
-		output.Empty();
-		errors.Empty();
-		wxExecute(wxString::FromUTF8(command), output, errors, wxEXEC_SYNC);
-
-		entry->importFile(pngfile);
-		fileutil::removeFile(pngfile);
-		deflsize = entry->size();
-
-		// send app output to console if wanted
-		if (false)
-		{
-			string defloptlog;
-			if (errors.GetCount())
-			{
-				defloptlog += "DeflOpt error messages:\n";
-				for (size_t i = 0; i < errors.GetCount(); ++i)
-					defloptlog += errors[i].utf8_string() + "\n";
-				errormessages += defloptlog;
-			}
-			if (output.GetCount())
-			{
-				defloptlog += "DeflOpt output messages:\n";
-				for (size_t i = 0; i < output.GetCount(); ++i)
-					defloptlog += output[i].utf8_string() + "\n";
-			}
-			log::info(1, defloptlog);
-		}
-	}
-	output.Clear();
-	errors.Clear();
 
 	// Rewrite special chunks
 	if (alphchunk)

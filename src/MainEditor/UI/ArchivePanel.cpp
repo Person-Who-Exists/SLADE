@@ -113,9 +113,6 @@ CVAR(Bool, elist_no_tree, false, CVar::Flag::Save)
 // External Variables
 //
 // -----------------------------------------------------------------------------
-EXTERN_CVAR(String, path_pngout)
-EXTERN_CVAR(String, path_pngcrush)
-EXTERN_CVAR(String, path_deflopt)
 EXTERN_CVAR(Bool, confirm_entry_revert)
 EXTERN_CVAR(Bool, archive_dir_ignore_hidden)
 
@@ -2747,43 +2744,7 @@ bool ArchivePanel::compileDECOHack() const
 // -----------------------------------------------------------------------------
 bool ArchivePanel::optimizePNG() const
 {
-	// Check if the PNG tools path are set up, at least one of them should be
-	if ((path_pngcrush.empty() || !fileutil::fileExists(path_pngcrush))
-		&& (path_pngout.empty() || !fileutil::fileExists(path_pngout))
-		&& (path_deflopt.empty() || !fileutil::fileExists(path_deflopt)))
-	{
-		wxMessageBox(
-			wxS("Error: PNG tool paths not defined or invalid, please configure in SLADE preferences"),
-			wxS("Error"),
-			wxOK | wxCENTRE | wxICON_ERROR);
-		return false;
-	}
 
-	// Get selected entries
-	auto selection = entry_tree_->selectedEntries();
-
-	ui::showSplash("Running external programs, please wait...", true, maineditor::windowWx());
-
-	// Begin recording undo level
-	undo_manager_->beginRecord("Optimize PNG");
-
-	// Go through selection
-	for (unsigned a = 0; a < selection.size(); a++)
-	{
-		ui::setSplashProgressMessage(selection[a]->nameNoExt());
-		ui::setSplashProgress(static_cast<float>(a) / static_cast<float>(selection.size()));
-		if (selection[a]->type()->formatId() == "img_png")
-		{
-			undo_manager_->recordUndoStep(std::make_unique<EntryDataUS>(selection[a]));
-			entryoperations::optimizePNG(selection[a]);
-		}
-	}
-	ui::hideSplash();
-
-	// Finish recording undo level
-	undo_manager_->endRecord(true);
-
-	return true;
 }
 
 // -----------------------------------------------------------------------------
